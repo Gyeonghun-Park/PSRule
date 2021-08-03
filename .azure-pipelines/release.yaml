@@ -10,18 +10,54 @@ variables:
 # Use build number format, i.e. 1.6.0-B2010001
 name: $(version)-B$(date:yyMM)$(rev:rrr)
 
-stages:
 
-- template: jobs/build.yaml
+resources:
+  repositories: 
+    - repository: templates
+      type: git
+      name: OneBranch.Pipelines/GovernedTemplates
+      ref: refs/heads/main
+
+
+extends:
+  template: v2/OneBranch.Official.CrossPlat.yml@templates # https://aka.ms/obpipelines/templates
   parameters:
-    artifact: PSRule
-    artifactPath: out/modules/PSRule
+    git:
+      fetchDepth: -1
+      longpaths: true
+    cloudvault: # https://aka.ms/obpipelines/cloudvault
+      enabled: false
+    globalSdl: # https://aka.ms/obpipelines/sdl
+      # tsa:
+      #  enabled: false # onebranch publish all sdl results to TSA. If TSA is disabled all SDL tools will forced into 'break' build mode.
+      cg:
+        failOnAlert: false # disable build breaks due to CG alerts
+      # credscan:
+      #   suppressionsFile: $(Build.SourcesDirectory)\.config\CredScanSuppressions.json
+      policheck:
+        break: true # always break the build on policheck issues. You can disable it by setting to 'false'
+      armory:
+        break: false # the example templates are similar to the quickstart repo - azure compliance rules are not applicable here
+      # suppression:
+      #   suppressionFile: $(Build.SourcesDirectory)\.gdn\global.gdnsuppress
+      #   suppressionSet: default
 
-- stage: Signing
-  condition: eq(variables.isManualBuild, true)
-  dependsOn: Build
-  jobs:
-  - template: jobs/signing.yaml
+    stages:
+    # - template: Common.yml
+    #   parameters:
+    #     official: true
+
+    - template: jobs/build.yaml
+      parameters:
+        vmImage: $(imageName)
+        artifact: PSRule
+        artifactPath: out/modules/PSRule
+
+    - stage: Signing
+      # condition: eq(variables.isManualBuild, true)
+      dependsOn: Build
+      jobs:
+      - template: jobs/signing.yaml
 
 # - stage: Compliance
 #   dependsOn:
