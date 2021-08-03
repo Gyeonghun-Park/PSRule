@@ -43,7 +43,8 @@
     },
     "files.associations": {
         "**/.azure-pipelines/*.yaml": "azure-pipelines",
-        "**/.azure-pipelines/jobs/*.yaml": "azure-pipelines"
+        "**/.azure-pipelines/jobs/*.yaml": "azure-pipelines",
+        "**/.azure-pipelines/steps/*.yaml": "azure-pipelines"
     },
     "cSpell.words": [
         "APPSERVICEMININSTANCECOUNT",

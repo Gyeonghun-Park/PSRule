@@ -1,0 +1,57 @@
+
+stages:
+
+# Build pipeline
+- stage: Build
+  displayName: Build
+  dependsOn: []
+  jobs:
+  - job:
+    pool:
+      vmImage: $(imageName)
+    displayName: 'Module'
+    steps:
+
+    # Install pipeline dependencies
+    - powershell: ./.azure-pipelines/pipeline-deps.ps1
+      displayName: 'Install dependencies'
+
+    # Build module
+    - powershell: Invoke-Build -Configuration $(buildConfiguration) -Build $(Build.BuildNumber)
+      displayName: 'Build module'
+
+    # DotNet test results
+    - task: PublishTestResults@2
+      displayName: 'Publish unit test results'
+      inputs:
+        testRunTitle: 'DotNet on $(imageName)'
+        testRunner: VSTest
+        testResultsFiles: 'reports/*.trx'
+        mergeTestResults: true
+        platform: $(imageName)
+        configuration: $(buildConfiguration)
+        publishRunAttachments: true
+      condition: succeededOrFailed()
+
+    # PSRule results
+    - task: PublishTestResults@2
+      displayName: 'Publish PSRule results'
+      inputs:
+        testRunTitle: 'PSRule on $(imageName)'
+        testRunner: NUnit
+        testResultsFiles: 'reports/ps-rule*.xml'
+        mergeTestResults: true
+        platform: $(imageName)
+        configuration: $(buildConfiguration)
+        publishRunAttachments: true
+      condition: succeededOrFailed()
+
+    - publish: reports/
+      displayName: 'Test output'
+      artifact: Tests
+      condition: succeededOrFailed()
+
+    # Generate artifacts
+    - publish: out/modules/PSRule
+      displayName: 'Publish module'
+      artifact: PSRule

@@ -1,0 +1,70 @@
+variables:
+  # Avoid expensive initialization of dotnet cli, see: https://donovanbrown.com/post/Stop-wasting-time-during-NET-Core-builds
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  isManualBuild: $[eq(variables['Build.Reason'], 'Manual')]
+
+resources:
+  repositories:
+    - repository: ComplianceRepo
+      type: github
+      endpoint: ComplianceGHRepo
+      name: PowerShell/compliance
+
+stages:
+
+- template: jobs/build.yaml
+
+- stage: Signing
+  condition: eq(variables.isManualBuild, true)
+  dependsOn: Build
+  jobs:
+    - job: CodeSigning
+      displayName: Code Signing
+      # pool:
+      #   name: Package ES Standard Build
+      #   demands: DotNetFramework
+      # variables:
+      # - group: ESRP
+      steps:
+        - template: steps/codeSigning.yaml
+
+# - stage: Compliance
+#   dependsOn:
+#     - Signing
+#     - Build
+#   condition: in(dependencies.Signing.result, 'Succeeded', 'Skipped')
+#   variables:
+#     signingSucceeded: eq(dependencies.Signing.result, 'Succeeded')
+#   jobs:
+#     - job: Compliance
+#       pool:
+#         name: Package ES Standard Build
+#         demands: DotNetFramework
+#       variables:
+#       - group: ESRP
+#       steps:
+#         - template: steps/releaseCompliance.yaml
+#           parameters:
+#             ${{ if ne(variables.signingSucceeded, true) }}:
+#               artifact: unsigned
+
+  # TODO: Automate release publication by implementing the template steps
+  # - stage: Publish
+  #   dependsOn:
+  #     - Tests
+  #     - Signing
+  #   jobs:
+  #     - deployment: PublishToGitHub
+  #       displayName: Publish to GitHub
+  #       environment: PSArm release approval
+  #       strategy:
+  #         runOnce:
+  #           deploy:
+  #             steps:
+  #               - template: templates/steps/download.yaml
+  #               - template: templates/steps/publishToGitHub.yaml
+  #     - job: PublishToGallery
+  #       displayName: Publish to PSGallery
+  #       steps:
+  #         - template: templates/steps/download.yaml
+  #         - template: templates/steps/download.yaml
