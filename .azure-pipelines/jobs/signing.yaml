@@ -8,6 +8,12 @@ parameters:
 - name: vmImage
   type: string
   default: 'ubuntu-20.04'
+- name: official
+  type: boolean
+  default: false
+- name: artifact
+  type: string
+  default: '$(build.artifact)'
 
 jobs:
 - job: CodeSigning
@@ -17,38 +23,18 @@ jobs:
   steps:
   - checkout: self
 
-  - template: ../steps/download.yaml
-    parameters:
-      artifact: unsigned
+  # Download module from build
+  - task: DownloadPipelineArtifact@2
+    displayName: 'Download module'
+    inputs:
+      artifact: '${{ parameters.artifact }}'
+      path: '$(Build.SourcesDirectory)/out/unsigned/${{ parameters.artifact }}'
 
-  - template: ../steps/logArtifacts.yaml
-
-  - template: ../steps/EsrpSign.yaml
-    parameters:
-      buildOutputPath: '$(Build.ArtifactStagingDirectory)/unsigned'
-      signOutputPath: '$(Build.ArtifactStagingDirectory)/FirstPartySigned'
-      alwaysCopy: true
-      certificateId: 'CP-230012' # Authenticode certificate
-      useMinimatch: true # Enable globbing
-      pattern: |
-        PSArm/{Desktop,Core}/PSArm.dll
-        PSArm/*.{ps1,psm1,psd1,ps1xml}
-
-  - template: ../steps/EsrpSign.yaml
-    parameters:
-      buildOutputPath: '$(Build.ArtifactStagingDirectory)/FirstPartySigned'
-      signOutputPath: '$(Build.ArtifactStagingDirectory)/signed'
-      alwaysCopy: true
-      certificateId: 'CP-231522' # Third-party certificate
-      useMinimatch: true # This enables the use of globbing
-      pattern: |
-        PSArm/{Desktop,Core}/Newtonsoft.Json.dll
-
-  - pwsh: |
-      Import-Module '$(Build.SourcesDirectory)/PSArm/tools/release/ReleaseTools.psm1'
-      Assert-FilesAreSigned -Path '$(Build.ArtifactStagingDirectory)/signed/PSArm'
-    displayName: Validate that files are signed
-
-  - publish: '$(Build.ArtifactStagingDirectory)/signed'
-    artifact: signed
-    displayName: Publish signed artifacts
+  - ${{ if eq(parameters.official, 'true') }}:
+    - task: onebranch.pipeline.signing@1
+      displayName: 'Sign ${{ parameters.artifact }}'
+      inputs:
+        command: 'sign'
+        signing_profile: 'external_distribution'
+        files_to_sign: '**/*.exe;**/*.dll;**/*.ps1'
+        search_root: '$(Build.SourcesDirectory)/out/unsigned/${{ parameters.artifact }}/'
