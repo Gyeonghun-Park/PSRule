@@ -3,13 +3,6 @@ variables:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   isManualBuild: $[eq(variables['Build.Reason'], 'Manual')]
 
-resources:
-  repositories:
-    - repository: ComplianceRepo
-      type: github
-      endpoint: ComplianceGHRepo
-      name: PowerShell/compliance
-
 stages:
 
 - template: jobs/build.yaml
@@ -18,15 +11,7 @@ stages:
   condition: eq(variables.isManualBuild, true)
   dependsOn: Build
   jobs:
-    - job: CodeSigning
-      displayName: Code Signing
-      # pool:
-      #   name: Package ES Standard Build
-      #   demands: DotNetFramework
-      # variables:
-      # - group: ESRP
-      steps:
-        - template: steps/codeSigning.yaml
+  - template: jobs/signing.yaml
 
 # - stage: Compliance
 #   dependsOn:

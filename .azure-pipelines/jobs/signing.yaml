@@ -1,0 +1,54 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+#
+# Code signing job
+#
+parameters:
+- name: vmImage
+  type: string
+  default: 'ubuntu-20.04'
+
+jobs:
+- job: CodeSigning
+  displayName: Code Signing
+  pool:
+    vmImage: ${{ parameters.vmImage }}
+  steps:
+  - checkout: self
+
+  - template: ../steps/download.yaml
+    parameters:
+      artifact: unsigned
+
+  - template: ../steps/logArtifacts.yaml
+
+  - template: ../steps/EsrpSign.yaml
+    parameters:
+      buildOutputPath: '$(Build.ArtifactStagingDirectory)/unsigned'
+      signOutputPath: '$(Build.ArtifactStagingDirectory)/FirstPartySigned'
+      alwaysCopy: true
+      certificateId: 'CP-230012' # Authenticode certificate
+      useMinimatch: true # Enable globbing
+      pattern: |
+        PSArm/{Desktop,Core}/PSArm.dll
+        PSArm/*.{ps1,psm1,psd1,ps1xml}
+
+  - template: ../steps/EsrpSign.yaml
+    parameters:
+      buildOutputPath: '$(Build.ArtifactStagingDirectory)/FirstPartySigned'
+      signOutputPath: '$(Build.ArtifactStagingDirectory)/signed'
+      alwaysCopy: true
+      certificateId: 'CP-231522' # Third-party certificate
+      useMinimatch: true # This enables the use of globbing
+      pattern: |
+        PSArm/{Desktop,Core}/Newtonsoft.Json.dll
+
+  - pwsh: |
+      Import-Module '$(Build.SourcesDirectory)/PSArm/tools/release/ReleaseTools.psm1'
+      Assert-FilesAreSigned -Path '$(Build.ArtifactStagingDirectory)/signed/PSArm'
+    displayName: Validate that files are signed
+
+  - publish: '$(Build.ArtifactStagingDirectory)/signed'
+    artifact: signed
+    displayName: Publish signed artifacts

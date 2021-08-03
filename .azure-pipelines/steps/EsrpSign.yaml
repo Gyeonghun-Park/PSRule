@@ -1,0 +1,175 @@
+parameters:
+  - name: "buildOutputPath"
+    default: "$(Build.ArtifactStagingDirectory)\\build"
+  - name: "signOutputPath"
+    default: "$(Build.ArtifactStagingDirectory)\\signed"
+  - name: "certificateId"
+    default: "CP-230012"
+  - name: "pattern"
+    default: "*.dll,*.exe"
+  - name: "useMinimatch"
+    default: "false"
+  - name: "signingService"
+    default: "pwshSigning"
+  - name: "shouldSign"
+    default: "auto"
+  - name: "alwaysCopy"
+    default: "False"
+  - name: "useCustomEsrpJson"
+    default: "false"
+  - name: "verifySignature"
+    default: "false"
+  - name: "pageHash"
+    default: "true"
+  - name: "displayName"
+    default: "ESRP Signing"
+
+steps:
+- task: UseDotNet@2
+  displayName: '${{ parameters.displayName }} - Install .NET Core sdk 2.x'
+  inputs:
+    version: 2.x
+
+- pwsh: |
+    Write-Verbose -Verbose "buildOutputPath = '${{ parameters.buildOutputPath }}'"
+    Write-Verbose -Verbose "signOutputPath = '${{ parameters.signOutputPath }}'"
+    Write-Verbose -Verbose "certificateId = '${{ parameters.certificateId }}'"
+    Write-Verbose -Verbose "pattern = '${{ parameters.pattern }}'"
+    Write-Verbose -Verbose "useMinimatch = '${{ parameters.useMinimatch }}'"
+    Write-Verbose -Verbose "signingService = '${{ parameters.signingService }}'"
+    Write-Verbose -Verbose "shouldSign = '${{ parameters.shouldSign }}'"
+    Write-Verbose -Verbose "alwaysCopy = '${{ parameters.alwaysCopy }}'"
+    Write-Verbose -Verbose "useCustomEsrpJson = '${{ parameters.useCustomEsrpJson }}'"
+    Write-Verbose -Verbose "verifySignature = '${{ parameters.verifySignature }}'"
+    Write-Verbose -Verbose "pageHash = '${{ parameters.pageHash }}'"
+
+    if (('${{ parameters.useCustomEsrpJson }}' -ne 'false') -and ('${{ parameters.certificateId }}' -ne ''))
+    {
+      throw "Only one of useCustomEsrpJson and certificateId must be set!"
+    }
+
+    $vstsCommandString = "vso[task.setvariable variable=ESRP_TEMPLATE_CERT_ID]${{ parameters.certificateId }}"
+    Write-Verbose -Message ("sending " + $vstsCommandString) -Verbose
+    Write-Host "##$vstsCommandString"
+
+  displayName: ${{ parameters.displayName }} - Log parameters
+
+- pwsh: |
+    if ('${{ parameters.shouldSign }}' -eq 'auto') {
+      Write-Verbose -Verbose -Message 'calculating shouldsign'
+      $shouldSign = $env:BUILD_REASON -eq 'Manual' -and $env:SKIPSIGNING -ne 'True' -and $env:SIGNINGSERVER -ne ''
+    }
+    elseif ('${{ parameters.shouldSign }}' -eq 'false') {
+      $shouldSign = $false
+    }
+    else {
+      $shouldSign = $true
+    }
+    $vstsCommandString = "vso[task.setvariable variable=ESRP_TEMPLATE_SHOULD_SIGN]$shouldSign"
+    Write-Verbose -Message ("sending " + $vstsCommandString) -Verbose
+    Write-Host "##$vstsCommandString"
+  displayName: ${{ parameters.displayName }} - Set ESRP_TEMPLATE_SHOULD_SIGN
+
+- template: template-compliance/authenticode-sign.yml
+  parameters:
+    buildOutputPath: ${{ parameters.buildOutputPath }}
+    signOutputPath: ${{ parameters.signOutputPath }}
+    pattern: ${{ parameters.pattern }}
+    certificateId: ${{ parameters.certificateId }}
+    verifySignature: ${{ parameters.verifySignature }}
+    pageHash: ${{ parameters.pageHash }}
+    displayName: ${{ parameters.displayName }}
+
+- template: template-compliance/authenticode-sign.yml
+  parameters:
+    buildOutputPath: ${{ parameters.buildOutputPath }}
+    signOutputPath: ${{ parameters.signOutputPath }}
+    pattern: ${{ parameters.pattern }}
+    certificateId: ${{ parameters.certificateId }}
+    verifySignature: ${{ parameters.verifySignature }}
+    pageHash: ${{ parameters.pageHash }}
+    displayName: ${{ parameters.displayName }}
+
+- template: template-compliance/authenticode-sign.yml
+  parameters:
+    buildOutputPath: ${{ parameters.buildOutputPath }}
+    signOutputPath: ${{ parameters.signOutputPath }}
+    pattern: ${{ parameters.pattern }}
+    certificateId: ${{ parameters.certificateId }}
+    verifySignature: ${{ parameters.verifySignature }}
+    pageHash: ${{ parameters.pageHash }}
+    displayName: ${{ parameters.displayName }}
+
+- template: template-compliance/nuget-sign.yml
+  parameters:
+    buildOutputPath: ${{ parameters.buildOutputPath }}
+    signOutputPath: ${{ parameters.signOutputPath }}
+    pattern: ${{ parameters.pattern }}
+    certificateId: ${{ parameters.certificateId }}
+    verifySignature: ${{ parameters.verifySignature }}
+    displayName: ${{ parameters.displayName }}
+
+- template: template-compliance/pgp-sign.yml
+  parameters:
+    signOutputPath: ${{ parameters.signOutputPath }}
+    pattern: ${{ parameters.pattern }}
+    certificateId: ${{ parameters.certificateId }}
+    displayName: ${{ parameters.displayName }}
+
+- template: template-compliance/macOS-sign.yml
+  parameters:
+    signOutputPath: ${{ parameters.signOutputPath }}
+    pattern: ${{ parameters.pattern }}
+    certificateId: ${{ parameters.certificateId }}
+    displayName: ${{ parameters.displayName }}
+
+- template: template-compliance/strongname-sign.yml
+  parameters:
+    signOutputPath: ${{ parameters.signOutputPath }}
+    pattern: ${{ parameters.pattern }}
+    certificateId: ${{ parameters.certificateId }}
+    displayName: ${{ parameters.displayName }}
+
+- ${{ if eq(parameters.useCustomEsrpJson, 'true') }}:
+  - template: template-compliance/custom-sign.yml
+    parameters:
+      signOutputPath: ${{ parameters.signOutputPath }}
+      displayName: ${{ parameters.displayName }}
+
+- pwsh: |
+    Write-Verbose -Verbose "EsrpJson = '${env:EsrpJson}'"
+  displayName: ${{ parameters.displayName }} - Log Json
+
+- pwsh: |
+    Write-Verbose "BUILD_OUTPUT_PATH- ${{ parameters.buildOutputPath }}" -Verbose
+    Write-Verbose "SIGNED_OUTPUT_PATH- ${{ parameters.signOutputPath }}" -Verbose
+    if(!(Test-Path '${{ parameters.signOutputPath }}'))
+    {
+      Write-Verbose "Creating SIGNED_OUTPUT_PATH- ${{ parameters.signOutputPath }}" -Verbose
+      $null = New-Item -Path '${{ parameters.signOutputPath }}' -ItemType Directory -force
+    }
+    Copy-Item -Path ${{ parameters.buildOutputPath }}\* -Dest ${{ parameters.signOutputPath }}\ -Recurse -Force -Verbose
+  displayName: ${{ parameters.displayName }} - Copy unsigned files to signed output directory
+  condition: and(succeeded(), or(eq(variables['ESRP_TEMPLATE_SHOULD_SIGN'], 'True'),ne('${{ parameters.alwaysCopy }}', 'False')))
+  timeoutInMinutes: 10
+
+- task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
+  displayName: ${{ parameters.displayName }} - Sign files
+  inputs:
+    ConnectedServiceName: ${{ parameters.signingService }}
+    FolderPath: '${{ parameters.signOutputPath }}'
+    signConfigType: inlineSignParams
+    inlineOperation: $(EsrpJson)
+    Pattern: ${{ parameters.pattern }}
+    UseMinimatch: ${{ parameters.useMinimatch }}
+  condition: and(succeeded(), eq(variables['ESRP_TEMPLATE_SHOULD_SIGN'], 'True'))
+  timeoutInMinutes: 30
+
+- pwsh: |
+    $file = Get-ChildItem -Path "${{ parameters.signOutputPath }}\codesignsummary-*.md" -File
+    $fileName = $file.Name
+    Move-Item -Path "${{ parameters.signOutputPath }}\$fileName" -Dest "$(Agent.TempDirectory)\$fileName"
+    Write-Host "##vso[artifact.upload containerfolder=signingReport;artifactname=signingReport]$(Agent.TempDirectory)\$fileName"
+  displayName: ${{ parameters.displayName }} - Upload codesign summary
+  condition: and(succeeded(), eq(variables['ESRP_TEMPLATE_SHOULD_SIGN'], 'True'))
+  timeoutInMinutes: 10
