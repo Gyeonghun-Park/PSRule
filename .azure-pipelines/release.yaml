@@ -2,10 +2,20 @@ variables:
   # Avoid expensive initialization of dotnet cli, see: https://donovanbrown.com/post/Stop-wasting-time-during-NET-Core-builds
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   isManualBuild: $[eq(variables['Build.Reason'], 'Manual')]
+  version: '1.6.0'
+  buildConfiguration: 'Release'
+  disable.coverage.autogenerate: 'true'
+  imageName: 'ubuntu-20.04'
+
+# Use build number format, i.e. 1.6.0-B2010001
+name: $(version)-B$(date:yyMM)$(rev:rrr)
 
 stages:
 
 - template: jobs/build.yaml
+  parameters:
+    artifact: PSRule
+    artifactPath: out/modules/PSRule
 
 - stage: Signing
   condition: eq(variables.isManualBuild, true)

@@ -1,3 +1,20 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+#
+# Build job
+#
+parameters:
+- name: vmImage
+  type: string
+  default: 'ubuntu-20.04'
+- name: buildConfiguration
+  type: string
+  default: 'Release'
+- name: artifact
+  type: string
+- name: artifactPath
+  type: string
 
 stages:
 
@@ -8,7 +25,7 @@ stages:
   jobs:
   - job:
     pool:
-      vmImage: $(imageName)
+      vmImage: ${{ parameters.vmImage }}
     displayName: 'Module'
     steps:
 
@@ -17,19 +34,19 @@ stages:
       displayName: 'Install dependencies'
 
     # Build module
-    - powershell: Invoke-Build -Configuration $(buildConfiguration) -Build $(Build.BuildNumber)
+    - powershell: Invoke-Build -Configuration ${{ parameters.buildConfiguration }} -Build $(Build.BuildNumber)
       displayName: 'Build module'
 
     # DotNet test results
     - task: PublishTestResults@2
       displayName: 'Publish unit test results'
       inputs:
-        testRunTitle: 'DotNet on $(imageName)'
+        testRunTitle: 'DotNet on ${{ parameters.vmImage }}'
         testRunner: VSTest
         testResultsFiles: 'reports/*.trx'
         mergeTestResults: true
-        platform: $(imageName)
-        configuration: $(buildConfiguration)
+        platform: ${{ parameters.vmImage }}
+        configuration: ${{ parameters.buildConfiguration }}
         publishRunAttachments: true
       condition: succeededOrFailed()
 
@@ -37,12 +54,12 @@ stages:
     - task: PublishTestResults@2
       displayName: 'Publish PSRule results'
       inputs:
-        testRunTitle: 'PSRule on $(imageName)'
+        testRunTitle: 'PSRule on ${{ parameters.vmImage }}'
         testRunner: NUnit
         testResultsFiles: 'reports/ps-rule*.xml'
         mergeTestResults: true
-        platform: $(imageName)
-        configuration: $(buildConfiguration)
+        platform: ${{ parameters.vmImage }}
+        configuration: ${{ parameters.buildConfiguration }}
         publishRunAttachments: true
       condition: succeededOrFailed()
 
@@ -52,6 +69,6 @@ stages:
       condition: succeededOrFailed()
 
     # Generate artifacts
-    - publish: out/modules/PSRule
+    - publish: ${{ parameters.artifactPath }}
       displayName: 'Publish module'
-      artifact: PSRule
+      artifact: ${{ parameters.artifact }}
